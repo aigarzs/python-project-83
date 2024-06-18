@@ -170,11 +170,21 @@ def check_url_status(url):
 def get_urls():
     with psycopg2.connect(DATABASE_URL) as connection:
         with connection.cursor() as cursor:
-            sql = "SELECT id, name, created_at FROM urls;"
+            sql = """select
+            u.id,
+            u.name,
+            u.created_at,
+            (select status_code from url_checks as c
+            where c.url_id = u.id order by c.created_at desc
+             limit 1) as status_code
+            from urls as u;"""
             cursor.execute(sql)
             data = cursor.fetchall()
             urls = []
             for r in data:
-                url = {"id": r[0], "name": r[1], "created_at": r[2]}
+                url = {"id": r[0],
+                       "name": r[1],
+                       "created_at": r[2],
+                       "status_code": r[3]}
                 urls.append(url)
     return render_template("urls_list.html", urls=urls)
