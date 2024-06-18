@@ -1,6 +1,6 @@
 from datetime import datetime
 from urllib.parse import urlparse
-
+from bs4 import BeautifulSoup
 import psycopg2
 import psycopg2.errorcodes as psyerrors
 import requests
@@ -106,7 +106,7 @@ def get_url(id):
                         "h1": r[2],
                         "title": r[3],
                         "description": r[4],
-                        "created_at": r[5]
+                        "created_at": datetime.date(r[5])
                     }
                     history.append(h)
             except Exception:
@@ -132,18 +132,34 @@ def post_url_checks(id):
                 return render_template("url_notfound.html")
 
             try:
-                status_code = check_url_status(url)
+                url_status = check_url(url)
             except requests.exceptions.RequestException:
                 msg_category = "danger"
                 msg_message = "Произошла ошибка при проверке"
                 flash(msg_message, msg_category)
                 return redirect(url_for("get_url", id=id))
 
-            sql = """INSERT INTO url_checks (url_id, status_code, created_at)
-             VALUES (%s, %s, %s);"""
-            data = (id, status_code, datetime.now())
-            print(cursor.mogrify(sql, data))
-            cursor.execute(sql, data)
+            url_status["id"] = id
+
+            sql = """INSERT INTO url_checks (
+                url_id,
+                status_code,
+                h1,
+                title,
+                description,
+                created_at
+                )
+             VALUES (
+             %(id)s,
+             %(status_code)s,
+             %(h1)s,
+             %(title)s,
+             %(description)s,
+             %(created_at)s
+             );"""
+
+            print(cursor.mogrify(sql, url_status))
+            cursor.execute(sql, url_status)
             connection.commit()
 
     msg_category = "success"
@@ -153,38 +169,53 @@ def post_url_checks(id):
     return redirect(url_for("get_url", id=id))
 
 
-def check_url_status(url):
+def check_url(url):
     try:
         response = requests.get(url)
         status_code = response.status_code
-        print(url + " status code:" + str(status_code))
         response.raise_for_status()
+        content = response.content
+        soup = BeautifulSoup(content, "html.parser")
+        h1 = soup.h1.text if soup.h1 else ""
+        title = soup.title.text if soup.title else ""
+        description = ""
+        for meta in soup.find_all("meta"):
+            if meta.get("name") == "description":
+                description = meta.get("content")
+                break
+        return {
+            "url": url,
+            "status_code": status_code,
+            "h1": h1,
+            "title": title,
+            "description": description,
+            "created_at": datetime.today()
+        }
+
     except Exception as e:
         print(e)
         raise e
-
-    return status_code
 
 
 @app.get("/urls")
 def get_urls():
     with psycopg2.connect(DATABASE_URL) as connection:
         with connection.cursor() as cursor:
-            sql = """select
+            sql = """SELECT
             u.id,
             u.name,
             u.created_at,
-            (select status_code from url_checks as c
-            where c.url_id = u.id order by c.created_at desc
-             limit 1) as status_code
-            from urls as u;"""
+            (SELECT status_code FROM url_checks AS c
+            WHERE c.url_id = u.id ORDER BY c.created_at DESC
+             LIMIT 1) AS status_code
+            FROM urls AS u;"""
             cursor.execute(sql)
             data = cursor.fetchall()
             urls = []
             for r in data:
                 url = {"id": r[0],
                        "name": r[1],
-                       "created_at": r[2],
+                       "created_at": datetime.date(r[2]),
                        "status_code": r[3]}
                 urls.append(url)
     return render_template("urls_list.html", urls=urls)
