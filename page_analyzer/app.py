@@ -17,27 +17,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-history = (
-    {"id": 1,
-     "code": 200,
-     "h1": "Example Domain",
-     "title": "Example Domain",
-     "description": "",
-     "created_at": "2024-06-17"},
-    {"id": 1,
-     "code": 200,
-     "h1": "Example Domain",
-     "title": "Example Domain",
-     "description": "",
-     "created_at": "2024-06-01"},
-    {"id": 1,
-     "code": 200,
-     "h1": "Example Domain",
-     "title": "Example Domain",
-     "description": "",
-     "created_at": "2024-05-15"}
-)
-
 
 @app.get("/")
 def get_index():
@@ -95,23 +74,43 @@ def validate_url(address):
 @app.get("/urls/<id>")
 def get_url(id):
     id = int(id)
-    try:
-        connection = psycopg2.connect(DATABASE_URL)
-        cursor = connection.cursor()
-        cursor.execute("SELECT * FROM urls WHERE id = %s;", (id,))
-        data = cursor.fetchone()
-        url = {"id": data[0],
-               "name": data[1],
-               "created_at": data[2]}
-    except Exception:
-        # msg_category = "danger"
-        # msg_message = err
-        # flash(msg_message, msg_category)
-        # messages = get_flashed_messages(with_categories=True)
-        return render_template("url_notfound.html")
-    finally:
-        cursor.close()
-        connection.close()
+    with psycopg2.connect(DATABASE_URL) as connection:
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute("SELECT * FROM urls WHERE id = %s;", (id,))
+                data = cursor.fetchone()
+                url = {"id": data[0],
+                       "name": data[1],
+                       "created_at": data[2]}
+            except Exception:
+                return render_template("url_notfound.html")
+
+            history = []
+            try:
+                sql = ("SELECT "
+                       "id, "
+                       "status_code, "
+                       "h1, "
+                       "title, "
+                       "description, "
+                       "created_at"
+                       " FROM url_checks "
+                       " WHERE url_id = %s "
+                       " ORDER BY created_at DESC;")
+                cursor.execute(sql, (id,))
+                data = cursor.fetchall()
+                for r in data:
+                    h = {
+                        "id": r[0],
+                        "status_code": r[1],
+                        "h1": r[2],
+                        "title": r[3],
+                        "description": r[4],
+                        "created_at": r[5]
+                    }
+                    history.append(h)
+            except Exception:
+                pass
 
     messages = get_flashed_messages(with_categories=True)
     return render_template("url_details.html", messages=messages,
@@ -120,9 +119,19 @@ def get_url(id):
 
 @app.post("/urls/<id>/checks")
 def post_url_checks(id):
-    msg_category = "success"
-    msg_message = "Страница успешно проверена"
-    flash(msg_message, msg_category)
+    id = int(id)
+    with psycopg2.connect(DATABASE_URL) as connection:
+        with connection.cursor() as cursor:
+            sql = """INSERT INTO url_checks (url_id, created_at)
+             VALUES (%s, %s);"""
+            print(cursor.mogrify(sql, (id, datetime.now())))
+            cursor.execute(sql, (id, datetime.now()))
+            connection.commit()
+
+            msg_category = "success"
+            msg_message = "Страница успешно проверена"
+            flash(msg_message, msg_category)
+
     return redirect(url_for("get_url", id=id))
 
 
