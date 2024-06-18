@@ -5,7 +5,8 @@ import psycopg2
 import psycopg2.errorcodes as psyerrors
 from validators.url import url as valid_url
 
-from flask import Flask, render_template, request, flash, get_flashed_messages, \
+from flask import Flask, render_template, request, flash, \
+    get_flashed_messages, \
     redirect, url_for
 from dotenv import load_dotenv
 import os
@@ -102,7 +103,7 @@ def get_url(id):
         url = {"id": data[0],
                "name": data[1],
                "created_at": data[2]}
-    except Exception as err:
+    except Exception:
         # msg_category = "danger"
         # msg_message = err
         # flash(msg_message, msg_category)
