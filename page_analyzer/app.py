@@ -81,7 +81,7 @@ def get_url(id):
                 data = cursor.fetchone()
                 url = {"id": data[0],
                        "name": data[1],
-                       "created_at": data[2]}
+                       "created_at": datetime.date(data[2])}
             except Exception:
                 return render_template("url_notfound.html")
 
