@@ -3,6 +3,7 @@ __pycache__/
 *$py.class
 
 .idea/
+.env
 poetry.lock
 .coverage
 coverage.xml
