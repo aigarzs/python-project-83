@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 
 import psycopg2
 import psycopg2.errorcodes as psyerrors
+import requests
 from validators.url import url as valid_url
 
 from flask import Flask, render_template, request, flash, \
@@ -10,7 +11,6 @@ from flask import Flask, render_template, request, flash, \
     redirect, url_for
 from dotenv import load_dotenv
 import os
-
 
 load_dotenv()
 app = Flask(__name__)
@@ -122,17 +122,48 @@ def post_url_checks(id):
     id = int(id)
     with psycopg2.connect(DATABASE_URL) as connection:
         with connection.cursor() as cursor:
-            sql = """INSERT INTO url_checks (url_id, created_at)
-             VALUES (%s, %s);"""
-            print(cursor.mogrify(sql, (id, datetime.now())))
-            cursor.execute(sql, (id, datetime.now()))
+            try:
+                sql = """SELECT name FROM urls
+                     WHERE id = %s
+                    """
+                cursor.execute(sql, (id,))
+                url = cursor.fetchone()[0]
+            except Exception:
+                return render_template("url_notfound.html")
+
+            try:
+                status_code = check_url_status(url)
+            except requests.exceptions.RequestException:
+                msg_category = "danger"
+                msg_message = "Произошла ошибка при проверке"
+                flash(msg_message, msg_category)
+                return redirect(url_for("get_url", id=id))
+
+            sql = """INSERT INTO url_checks (url_id, status_code, created_at)
+             VALUES (%s, %s, %s);"""
+            data = (id, status_code, datetime.now())
+            print(cursor.mogrify(sql, data))
+            cursor.execute(sql, data)
             connection.commit()
 
-            msg_category = "success"
-            msg_message = "Страница успешно проверена"
-            flash(msg_message, msg_category)
+    msg_category = "success"
+    msg_message = "Страница успешно проверена"
+    flash(msg_message, msg_category)
 
     return redirect(url_for("get_url", id=id))
+
+
+def check_url_status(url):
+    try:
+        response = requests.get(url)
+        status_code = response.status_code
+        print(url + " status code:" + str(status_code))
+        response.raise_for_status()
+    except Exception as e:
+        print(e)
+        raise e
+
+    return status_code
 
 
 @app.get("/urls")
