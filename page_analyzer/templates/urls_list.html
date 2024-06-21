@@ -21,7 +21,7 @@
         <tr>
           <td>{{ u.id }}</td>
           <td>
-            <a href="/urls/{{ u.id }}">
+            <a href="{{ url_for('get_url', id=u.id ) }}">
               {{ u.name }}
             </a>
           </td>

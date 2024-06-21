@@ -1,8 +1,7 @@
 from datetime import datetime
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
-import psycopg2
-import psycopg2.errorcodes as psyerrors
+import page_analyzer.database as database
 import requests
 from validators.url import url as valid_url
 
@@ -15,7 +14,6 @@ import os
 load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-DATABASE_URL = os.getenv('DATABASE_URL')
 
 
 @app.get("/")
@@ -28,27 +26,13 @@ def post_urls():
     u = request.form.to_dict()["url"]
     url = validate_url(u)
     if url:
-        print("Processing... " + url)
-        with psycopg2.connect(DATABASE_URL) as connection:
-            with connection.cursor() as cursor:
-                try:
-                    cursor.execute("INSERT INTO urls (name, created_at) "
-                                   "VALUES (%s, %s);", (url, datetime.now()))
-                    connection.commit()
-                    msg_category = "success"
-                    msg_message = "Страница успешно добавлена"
-                    flash(msg_message, msg_category)
-                except psycopg2.Error as err:
-                    connection.rollback()
-                    if not err.pgcode == psyerrors.UNIQUE_VIOLATION:
-                        msg_category = "danger"
-                        msg_message = err
-                        flash(msg_message, msg_category)
+        print("Posting... " + url)
+        if database.post_url(url):
+            msg_category = "success"
+            msg_message = "Страница успешно добавлена"
+            flash(msg_message, msg_category)
 
-                sql = "SELECT id FROM urls WHERE name = %s;"
-                print(cursor.mogrify(sql, (url,)))
-                cursor.execute(sql, (url,))
-                id = cursor.fetchone()[0]
+        id = database.get_url_by_name(url)["id"]
         return redirect(url_for("get_url", id=id))
 
     else:
@@ -57,7 +41,7 @@ def post_urls():
         flash(msg_message, msg_category)
         messages = get_flashed_messages(with_categories=True)
         url = url if url else ""
-        return render_template("index.html", messages=messages, url=url)
+        return render_template("index.html", messages=messages, url=u)
 
 
 def validate_url(address):
@@ -74,43 +58,11 @@ def validate_url(address):
 @app.get("/urls/<id>")
 def get_url(id):
     id = int(id)
-    with psycopg2.connect(DATABASE_URL) as connection:
-        with connection.cursor() as cursor:
-            try:
-                cursor.execute("SELECT * FROM urls WHERE id = %s;", (id,))
-                data = cursor.fetchone()
-                url = {"id": data[0],
-                       "name": data[1],
-                       "created_at": datetime.date(data[2])}
-            except Exception:
-                return render_template("url_notfound.html")
+    url = database.get_url_by_id(id)
+    if not url:
+        return render_template("url_notfound.html")
 
-            history = []
-            try:
-                sql = ("SELECT "
-                       "id, "
-                       "status_code, "
-                       "h1, "
-                       "title, "
-                       "description, "
-                       "created_at"
-                       " FROM url_checks "
-                       " WHERE url_id = %s "
-                       " ORDER BY created_at DESC;")
-                cursor.execute(sql, (id,))
-                data = cursor.fetchall()
-                for r in data:
-                    h = {
-                        "id": r[0],
-                        "status_code": r[1],
-                        "h1": r[2],
-                        "title": r[3],
-                        "description": r[4],
-                        "created_at": datetime.date(r[5])
-                    }
-                    history.append(h)
-            except Exception:
-                pass
+    history = database.get_url_history(id)
 
     messages = get_flashed_messages(with_categories=True)
     return render_template("url_details.html", messages=messages,
@@ -120,47 +72,22 @@ def get_url(id):
 @app.post("/urls/<id>/checks")
 def post_url_checks(id):
     id = int(id)
-    with psycopg2.connect(DATABASE_URL) as connection:
-        with connection.cursor() as cursor:
-            try:
-                sql = """SELECT name FROM urls
-                     WHERE id = %s
-                    """
-                cursor.execute(sql, (id,))
-                url = cursor.fetchone()[0]
-            except Exception:
-                return render_template("url_notfound.html")
+    url = database.get_url_by_id(id)
+    if url:
+        url = url["name"]
+    else:
+        return render_template("url_notfound.html")
 
-            try:
-                url_status = check_url(url)
-            except requests.exceptions.RequestException:
-                msg_category = "danger"
-                msg_message = "Произошла ошибка при проверке"
-                flash(msg_message, msg_category)
-                return redirect(url_for("get_url", id=id))
+    try:
+        url_status = check_url(url)
+        url_status["id"] = id
+    except requests.exceptions.RequestException as err:
+        msg_category = "danger"
+        msg_message = "Произошла ошибка при проверке: " + str(err)
+        flash(msg_message, msg_category)
+        return redirect(url_for("get_url", id=id))
 
-            url_status["id"] = id
-
-            sql = """INSERT INTO url_checks (
-                url_id,
-                status_code,
-                h1,
-                title,
-                description,
-                created_at
-                )
-             VALUES (
-             %(id)s,
-             %(status_code)s,
-             %(h1)s,
-             %(title)s,
-             %(description)s,
-             %(created_at)s
-             );"""
-
-            print(cursor.mogrify(sql, url_status))
-            cursor.execute(sql, url_status)
-            connection.commit()
+    database.post_url_status(url_status)
 
     msg_category = "success"
     msg_message = "Страница успешно проверена"
@@ -199,23 +126,5 @@ def check_url(url):
 
 @app.get("/urls")
 def get_urls():
-    with psycopg2.connect(DATABASE_URL) as connection:
-        with connection.cursor() as cursor:
-            sql = """SELECT
-            u.id,
-            u.name,
-            u.created_at,
-            (SELECT status_code FROM url_checks AS c
-            WHERE c.url_id = u.id ORDER BY c.created_at DESC
-             LIMIT 1) AS status_code
-            FROM urls AS u;"""
-            cursor.execute(sql)
-            data = cursor.fetchall()
-            urls = []
-            for r in data:
-                url = {"id": r[0],
-                       "name": r[1],
-                       "created_at": datetime.date(r[2]),
-                       "status_code": r[3]}
-                urls.append(url)
+    urls = database.get_urls()
     return render_template("urls_list.html", urls=urls)
