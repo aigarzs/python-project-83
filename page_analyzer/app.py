@@ -41,7 +41,7 @@ def post_urls():
         flash(msg_message, msg_category)
         messages = get_flashed_messages(with_categories=True)
         url = url if url else ""
-        return render_template("index.html", messages=messages, url=u)
+        return render_template("index.html", messages=messages, url=u), 422
 
 
 def validate_url(address):
