@@ -81,7 +81,7 @@ def post_url_checks(id):
     try:
         url_status = check_url(url)
         url_status["id"] = id
-    except requests.exceptions.RequestException as err:
+    except requests.exceptions.RequestException:
         msg_category = "danger"
         msg_message = "Произошла ошибка при проверке"
         flash(msg_message, msg_category)
