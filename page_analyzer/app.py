@@ -83,7 +83,7 @@ def post_url_checks(id):
         url_status["id"] = id
     except requests.exceptions.RequestException as err:
         msg_category = "danger"
-        msg_message = "Произошла ошибка при проверке: " + str(err)
+        msg_message = "Произошла ошибка при проверке"
         flash(msg_message, msg_category)
         return redirect(url_for("get_url", id=id))
 
