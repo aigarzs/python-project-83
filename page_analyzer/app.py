@@ -31,6 +31,11 @@ def post_urls():
             msg_category = "success"
             msg_message = "Страница успешно добавлена"
             flash(msg_message, msg_category)
+        else:
+            msg_category = "success"
+            msg_message = "Страница успешно добавлена"
+            # msg_message = "Страница уже существует"
+            flash(msg_message, msg_category)
 
         id = database.get_url_by_name(url)["id"]
         return redirect(url_for("get_url", id=id))
