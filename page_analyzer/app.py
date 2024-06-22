@@ -6,7 +6,6 @@ import requests
 from validators.url import url as valid_url
 
 from flask import Flask, render_template, request, flash, \
-    get_flashed_messages, \
     redirect, url_for
 from dotenv import load_dotenv
 import os
@@ -33,8 +32,8 @@ def post_urls():
             flash(msg_message, msg_category)
         else:
             msg_category = "success"
-            msg_message = "Страница успешно добавлена"
-            # msg_message = "Страница уже существует"
+            # msg_message = "Страница успешно добавлена"
+            msg_message = "Страница уже существует"
             flash(msg_message, msg_category)
 
         id = database.get_url_by_name(url)["id"]
@@ -44,9 +43,8 @@ def post_urls():
         msg_category = "danger"
         msg_message = "Некорректный URL"
         flash(msg_message, msg_category)
-        messages = get_flashed_messages(with_categories=True)
         url = url if url else ""
-        return render_template("index.html", messages=messages, url=u), 422
+        return render_template("index.html", url=u), 422
 
 
 def validate_url(address):
@@ -69,8 +67,7 @@ def get_url(id):
 
     history = database.get_url_history(id)
 
-    messages = get_flashed_messages(with_categories=True)
-    return render_template("url_details.html", messages=messages,
+    return render_template("url_details.html",
                            url=url, history=history)
 
 
