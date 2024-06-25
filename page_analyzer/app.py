@@ -90,7 +90,7 @@ def post_url_checks(id):
         history = database.get_url_history(id)
         return render_template("url_details.html",
                                url=url, history=history), 422
-        
+
     database.post_url_status(url_status)
 
     msg_category = "success"
