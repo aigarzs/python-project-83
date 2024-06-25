@@ -43,7 +43,6 @@ def post_urls():
         msg_category = "danger"
         msg_message = "Некорректный URL"
         flash(msg_message, msg_category)
-        url = url if url else ""
         return render_template("index.html", url=u), 422
 
 
@@ -87,8 +86,11 @@ def post_url_checks(id):
         msg_category = "danger"
         msg_message = "Произошла ошибка при проверке"
         flash(msg_message, msg_category)
-        return redirect(url_for("get_url", id=id))
-
+        url = database.get_url_by_id(id)
+        history = database.get_url_history(id)
+        return render_template("url_details.html",
+                               url=url, history=history), 422
+        
     database.post_url_status(url_status)
 
     msg_category = "success"
