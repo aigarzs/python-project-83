@@ -3,7 +3,9 @@ from datetime import datetime
 
 import psycopg2
 import psycopg2.errorcodes as psyerrors
+from dotenv import load_dotenv
 
+load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 
