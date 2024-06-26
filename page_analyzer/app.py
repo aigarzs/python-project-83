@@ -4,13 +4,14 @@ from bs4 import BeautifulSoup
 import page_analyzer.database as database
 import requests
 from validators.url import url as valid_url
-
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, flash, \
     redirect, url_for
 import os
 
 
 app = Flask(__name__)
+load_dotenv()
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 
