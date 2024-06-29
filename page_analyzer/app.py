@@ -1,9 +1,6 @@
-from datetime import datetime
-from urllib.parse import urlparse
-from bs4 import BeautifulSoup
-import page_analyzer.database as database
 import requests
-from validators.url import url as valid_url
+import page_analyzer.database as database
+import page_analyzer.urls as urls
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, flash, \
     redirect, url_for
@@ -23,38 +20,20 @@ def get_index():
 @app.post("/urls")
 def post_urls():
     u = request.form.to_dict()["url"]
-    url = validate_url(u)
+    url = urls.validate(u)
     if url:
-        print("Posting... " + url)
-        if database.post_url(url):
-            msg_category = "success"
-            msg_message = "Страница успешно добавлена"
-            flash(msg_message, msg_category)
+        id = database.post_url(url)
+        if id:
+            flash("Страница успешно добавлена", "success")
         else:
-            msg_category = "success"
-            # msg_message = "Страница успешно добавлена"
-            msg_message = "Страница уже существует"
-            flash(msg_message, msg_category)
+            flash("Страница уже существует", "success")
+            id = database.get_url_by_name(url)["id"]
 
-        id = database.get_url_by_name(url)["id"]
         return redirect(url_for("get_url", id=id))
 
     else:
-        msg_category = "danger"
-        msg_message = "Некорректный URL"
-        flash(msg_message, msg_category)
+        flash("Некорректный URL", "danger")
         return render_template("index.html", url=u), 422
-
-
-def validate_url(address):
-    if valid_url(address):
-        o = urlparse(address)
-        if o.scheme and o.netloc:
-            return o.scheme + "://" + o.netloc
-        else:
-            return False
-    else:
-        return False
 
 
 @app.get("/urls/<id>")
@@ -80,12 +59,17 @@ def post_url_checks(id):
         return render_template("url_notfound.html")
 
     try:
-        url_status = check_url(url)
+        response = requests.get(url)
+        status_code = response.status_code
+        response.raise_for_status()
+        content = response.content
+        url_status = urls.check(content)
         url_status["id"] = id
+        url_status["url"] = url
+        url_status["status_code"] = status_code
+
     except requests.exceptions.RequestException:
-        msg_category = "danger"
-        msg_message = "Произошла ошибка при проверке"
-        flash(msg_message, msg_category)
+        flash("Произошла ошибка при проверке", "danger")
         url = database.get_url_by_id(id)
         history = database.get_url_history(id)
         return render_template("url_details.html",
@@ -93,42 +77,12 @@ def post_url_checks(id):
 
     database.post_url_status(url_status)
 
-    msg_category = "success"
-    msg_message = "Страница успешно проверена"
-    flash(msg_message, msg_category)
+    flash("Страница успешно проверена", "success")
 
     return redirect(url_for("get_url", id=id))
 
 
-def check_url(url):
-    try:
-        response = requests.get(url)
-        status_code = response.status_code
-        response.raise_for_status()
-        content = response.content
-        soup = BeautifulSoup(content, "html.parser")
-        h1 = soup.h1.text if soup.h1 else ""
-        title = soup.title.text if soup.title else ""
-        description = ""
-        for meta in soup.find_all("meta"):
-            if meta.get("name") == "description":
-                description = meta.get("content")
-                break
-        return {
-            "url": url,
-            "status_code": status_code,
-            "h1": h1,
-            "title": title,
-            "description": description,
-            "created_at": datetime.today()
-        }
-
-    except Exception as e:
-        print(e)
-        raise e
-
-
 @app.get("/urls")
 def get_urls():
-    urls = database.get_urls()
-    return render_template("urls_list.html", urls=urls)
+    urls_list = database.get_urls()
+    return render_template("urls_list.html", urls=urls_list)
