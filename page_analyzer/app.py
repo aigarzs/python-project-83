@@ -39,7 +39,11 @@ def post_urls():
 
 @app.get("/urls/<id>")
 def get_url(id):
-    id = int(id)
+    try:
+        id = int(id)
+    except Exception:
+        return render_template("url_notfound.html"), 404
+
     url = database.get_url_by_id(id)
     if not url:
         return render_template("url_notfound.html"), 404
