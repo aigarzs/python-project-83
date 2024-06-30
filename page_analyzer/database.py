@@ -1,74 +1,71 @@
 import os
 from datetime import datetime
-
 import psycopg2
-import psycopg2.errorcodes as psyerrors
+from psycopg2.extras import DictCursor
 from dotenv import load_dotenv
 
 load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 
-def db_cursor_execute(sql, params, fetch_results=False):
-    with psycopg2.connect(DATABASE_URL) as connection:
-        with connection.cursor() as cursor:
-            try:
-                cursor.execute(sql, params)
-                connection.commit()
-                if fetch_results:
-                    records = cursor.fetchall()
-                    return records
-            except psycopg2.Error as err:
-                connection.rollback()
-                raise err
+def db_execute(func):
+    def inner(*args, **kwargs):
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cursor:
+                inner_args = func(*args, **kwargs)
+                sql = inner_args["sql"]
+                params = inner_args["params"]
+                commit = inner_args["commit"]
+                fetch_results = inner_args["fetch_results"]
+                try:
+                    cursor.execute(sql, params)
+                    if commit:
+                        conn.commit()
+                    if fetch_results == "fetchone":
+                        return cursor.fetchone()
+                    elif fetch_results == "fetchall":
+                        return cursor.fetchall()
+                except psycopg2.Error as err:
+                    if commit:
+                        conn.rollback()
+                    raise err
+
+    return inner
 
 
+@db_execute
 def post_url(url):
-    try:
-        sql = """INSERT INTO urls (name, created_at)
+    sql = """INSERT INTO urls (name, created_at)
         VALUES (%s, %s)
         RETURNING id;"""
-        params = (url, datetime.now())
-        records = db_cursor_execute(sql, params, True)
-        if records:
-            return records[0][0]
-        else:
-            return False
-    except psycopg2.Error as err:
-        if err.pgcode == psyerrors.UNIQUE_VIOLATION:
-            return False
-        else:
-            raise err
+    params = (url, datetime.now())
+    return {"sql": sql,
+            "params": params,
+            "commit": True,
+            "fetch_results": "fetchone"}
 
 
+@db_execute
 def get_url_by_name(url):
     sql = "SELECT * FROM urls WHERE name = %s;"
     params = (url,)
-    records = db_cursor_execute(sql, params, True)
-    record = records[0] if records else None
-    if record:
-        url = {"id": record[0],
-               "name": record[1],
-               "created_at": datetime.date(record[2])}
-        return url
-    else:
-        return None
+    return {"sql": sql,
+            "params": params,
+            "commit": False,
+            "fetch_results": "fetchone"}
 
 
+@db_execute
 def get_url_by_id(id):
     sql = "SELECT * FROM urls WHERE id = %s;"
     params = (id,)
-    records = db_cursor_execute(sql, params, True)
-    record = records[0] if records else None
-    if record:
-        url = {"id": record[0],
-               "name": record[1],
-               "created_at": datetime.date(record[2])}
-        return url
-    else:
-        return None
+    return {"sql": sql,
+            "params": params,
+            "commit": False,
+            "fetch_results": "fetchone"}
 
 
+@db_execute
 def get_url_history(id):
     id = int(id)
     sql = ("SELECT "
@@ -82,24 +79,15 @@ def get_url_history(id):
            " WHERE url_id = %s "
            " ORDER BY created_at DESC;")
     params = (id,)
-    data = db_cursor_execute(sql, params, True)
-    history = []
-    if data:
-        for r in data:
-            h = {
-                "id": r[0],
-                "status_code": r[1],
-                "h1": r[2],
-                "title": r[3],
-                "description": r[4],
-                "created_at": datetime.date(r[5])
+    return {"sql": sql,
+            "params": params,
+            "commit": False,
+            "fetch_results": "fetchall"
             }
-            history.append(h)
-
-    return history
 
 
-def post_url_status(status):
+@db_execute
+def post_url_seo(seo):
     sql = """INSERT INTO url_checks (
             url_id,
             status_code,
@@ -117,9 +105,13 @@ def post_url_status(status):
          %(created_at)s
          );"""
 
-    db_cursor_execute(sql, status)
+    return {"sql": sql,
+            "params": seo,
+            "commit": True,
+            "fetch_results": None}
 
 
+@db_execute
 def get_urls():
     sql = """SELECT
             u.id,
@@ -129,13 +121,8 @@ def get_urls():
             WHERE c.url_id = u.id ORDER BY c.created_at DESC
              LIMIT 1) AS status_code
             FROM urls AS u;"""
-    data = db_cursor_execute(sql, None, True)
-    urls = []
-    for r in data:
-        url = {"id": r[0],
-               "name": r[1],
-               "created_at": datetime.date(r[2]),
-               "status_code": r[3]}
-        urls.append(url)
-
-    return urls
+    return {"sql": sql,
+            "params": None,
+            "commit": False,
+            "fetch_results": "fetchall"
+            }

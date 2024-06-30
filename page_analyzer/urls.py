@@ -4,9 +4,9 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 
-def validate(address):
-    if valid_url(address):
-        o = urlparse(address)
+def validate_and_normalize(url):
+    if valid_url(url):
+        o = urlparse(url)
         if o.scheme and o.netloc:
             return o.scheme + "://" + o.netloc
         else:
@@ -15,7 +15,7 @@ def validate(address):
         return False
 
 
-def check(content):
+def extract_seo_data(content):
     soup = BeautifulSoup(content, "html.parser")
     h1 = soup.h1.text if soup.h1 else ""
     title = soup.title.text if soup.title else ""

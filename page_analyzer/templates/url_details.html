@@ -19,7 +19,7 @@
         </tr>
         <tr>
           <td>Дата создания</td>
-          <td>{{ url.created_at }}</td>
+          <td>{{ url.created_at.strftime('%Y-%m-%d') }}</td>
         </tr>
       </tbody>
     </table>
@@ -51,7 +51,7 @@
         <td>{{ hist.h1 }}</td>
         <td>{{ hist.title }}</td>
         <td>{{ hist.description }}</td>
-        <td>{{ hist.created_at }}</td>
+        <td>{{ hist.created_at.strftime('%Y-%m-%d') }}</td>
     </tr>
 
       {% endfor %}
