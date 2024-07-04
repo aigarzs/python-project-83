@@ -24,7 +24,7 @@ def post_urls():
     url = urls.validate_and_normalize(u)
     if url:
         try:
-            id = database.post_url(url)
+            id = database.post_url(url)["id"]
             flash("Страница успешно добавлена", "success")
         except psycopg2.Error:
             flash("Страница уже существует", "success")
