@@ -1,16 +1,16 @@
 from urllib.parse import urlparse
 from validators.url import url as valid_url
-from datetime import datetime
 from bs4 import BeautifulSoup
 
 
-def validate_and_normalize(url):
-    if valid_url(url):
-        o = urlparse(url)
-        if o.scheme and o.netloc:
-            return o.scheme + "://" + o.netloc
-        else:
-            return False
+def validate_url(url):
+    return valid_url(url)
+
+
+def normalize_url(url):
+    o = urlparse(url)
+    if o.scheme and o.netloc:
+        return o.scheme + "://" + o.netloc
     else:
         return False
 
@@ -24,6 +24,5 @@ def extract_seo_data(content):
     return {
         "h1": h1,
         "title": title,
-        "description": description,
-        "created_at": datetime.today()
+        "description": description
     }

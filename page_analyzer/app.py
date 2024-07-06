@@ -21,10 +21,10 @@ def get_index():
 @app.post("/urls")
 def post_urls():
     u = request.form.to_dict()["url"]
-    url = urls.validate_and_normalize(u)
-    if url:
+    if urls.validate_url(u):
+        url = urls.normalize_url(u)
         try:
-            id = database.post_url(url)["id"]
+            id = database.add_url(url)["id"]
             flash("Страница успешно добавлена", "success")
         except psycopg2.Error:
             flash("Страница уже существует", "success")
@@ -39,16 +39,11 @@ def post_urls():
 
 @app.get("/urls/<id>")
 def get_url(id):
-    try:
-        id = int(id)
-    except Exception:
-        return render_template("url_notfound.html"), 404
-
     url = database.get_url_by_id(id)
     if not url:
         return render_template("url_notfound.html"), 404
 
-    history = database.get_url_history(id)
+    history = database.get_url_history_by_url_id(id)
 
     return render_template("url_details.html",
                            url=url, history=history), 200
@@ -76,7 +71,7 @@ def post_url_checks(id):
     except requests.exceptions.RequestException:
         flash("Произошла ошибка при проверке", "danger")
         url = database.get_url_by_id(id)
-        history = database.get_url_history(id)
+        history = database.get_url_history_by_url_id(id)
         return render_template("url_details.html",
                                url=url, history=history), 422
 
